@@ -1,0 +1,11 @@
+pi-home is based on / adapted from pi-stats-ext:
+https://github.com/irfansofyana/pi-stats-ext
+Upstream revision: 572574a039fe7bba4af6caceea4ba0af6067f5b0 (v0.2.0)
+Copyright (c) 2026 Irfan Sofyana. MIT license; see LICENSE.
+
+The incremental-cache and usage aggregation design, token/cost formatting,
+and calendar heatmap rendering in src/stats.ts and src/heatmap.ts derive
+from that project. The home/session UI, accounting changes, lifecycle
+integration, recoverable deletion and tests are pi-home additions.
+
+pi-home modifications Copyright (c) 2026 catwinee. MIT license.

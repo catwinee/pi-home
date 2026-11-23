@@ -10,7 +10,6 @@ The startup overview and management tools are separate; there is no second Home 
 [Today]
   messages 18 replies 51 tools 92 errors 2
   ↑ 120k ↓ 18k CH R 950k W 12k cost $1.20
-  Models tokens
   …
 
 [Activity]
@@ -21,7 +20,7 @@ The startup overview and management tools are separate; there is no second Home 
 
 ## Install or try locally
 
-Development and validation baseline: **Pi 1.2.0, Node ≥ 22.19**. The extension uses the current `@earendil-works/*` APIs; compatibility with older Pi versions is not promised.
+Validated with **Pi 1.2.0 and 1.4.0, Node ≥ 22.19**. The extension uses the current `@earendil-works/*` APIs; compatibility with older Pi versions is not promised.
 
 From a local checkout:
 
@@ -50,19 +49,19 @@ There is no published npm package. Do not load both a local copy and a Git-insta
 
 On a normal fresh Pi launch, pi-home **replaces the startup header instead of adding a duplicate summary widget above the editor**:
 
-- Keeps Pi's native colored icon and running version number. Resource counts replace the long shortcut sentence on the second line: `Context … · Skills … · Extensions …    /home resources`.
+- Keeps Pi's native colored icon and running version number. Resource counts replace the long shortcut sentence on the second line: `Context … Skills … Extensions …    /home resources`.
 - Updates appear in place only after Pi's native asynchronous checks report them: `v1.2.0 update available: v1.3.0` on the logo/version line, and `Extensions 11↑` for package updates. The appended notice and arrow use the theme's yellow/warning color; existing logo/version/count styling stays unchanged. Initially neither indicator is shown—this does not mean the checks have finished or that everything is current. No spinner, extra check, timer or update cache is added. Narrow screens wrap the notice as needed.
 - These inline indicators replace the two native update notification boxes, including their release note/package list. Other warnings and errors remain visible. The recognized results survive `/reload`, `/new` and session switches in the same Pi process; they are not saved to disk. Updating is still manual: `pi update` for Pi, `pi update --extensions` for packages. The arrow means native package updates are available, not that every loaded extension needs updating. Unsupported notification formats stay native; disabling startup or replacing the header restores native presentation for notices still in the transcript.
-- Keeps `Press ctrl+o to show full startup help and loaded resources.` Pi's native binding expands and collapses help and resource lists; remapped shortcuts are reflected in the native hint.
+- Shortens the native hint to `Press ctrl+o to show help and loaded resources.`, preserving its styling and remapped shortcut. Pi's native binding still expands and collapses help and resource lists.
 - Leaves cwd display to Pi's footer; no redundant workspace section. `/workspaces` still filters sessions by recorded cwd without running `cd` or changing Pi's working directory.
 - Shows the `[Today]` / `[Activity]` layout immediately, with gray `—` placeholders for unknown values and calendar cells rather than fabricated zeroes or a prominent loading message. Statistics fill in place without taking editor focus. Ordinary metric widths and two model rows are reserved to reduce layout shifts; unusually large values and genuine warnings can still add rows. Long model names are shortened in the startup summary; full names remain in `/home models`.
 - `[Today]` shows message, reply, tool, and error counts, input/output tokens, cache tokens, recorded cost, and model bars. `[Activity]` follows after a blank line. The layout is always single-column, with native `mdHeading` colors, unbolded headings, indented gray labels (`dim`), and brighter gray values (`muted`).
 - Today's counts and usage each occupy one line when space permits, wrapping on narrower screens: `messages … replies … tools … errors …` and `↑ … ↓ … CH R … W … cost …`. `↑/↓` mean input/output; `CH R/W` mean cache-read/cache-write tokens. New-session, active-session, and nested-call figures are omitted from startup; model/project/tool statistics remain available on demand.
-- Model bars include only groups with recorded tokens greater than zero. They show token counts and shares of all models' recorded tokens, including cache tokens. Usage without model attribution is labeled `Unattributed`; attribution is not guessed. The heatmap is not removed just because the terminal is short: use Pi's native scrolling when content exceeds the viewport.
+- Model bars follow usage directly, without a separate heading; the heatmap ends at Saturday without a repeated legend or browser-command footer. Model bars include only groups with recorded tokens greater than zero. They show token counts and shares of all models' recorded tokens, including cache tokens. Usage without model attribution is labeled `Unattributed`; attribution is not guessed. The heatmap is not removed just because the terminal is short: use Pi's native scrolling when content exceeds the viewport.
 - Ordinary resource lists are collapsed by default, but **conflicts and loading failures remain visible**. `/home resources` opens scrollable read-only details, including prompts, without inserting the full inventory into the conversation.
 - Does not steal input focus or replace the footer/editor. The startup snapshot remains after a conversation begins. Resuming, `/new`, and forking keep the compact header without regenerating activity statistics. `/reload` rebuilds the overview in an empty session; in an existing conversation it updates only the compact header.
 
-**Compatibility boundary:** Pi's public extension API does not expose the complete loaded-resource inventory or a separate way to fold its native resource container. `src/native-startup.ts` is a **Pi 1.2.0-only** presentation adapter. It reuses native logo/help components and counts leaf rows in Pi's own resource inventory—no directory-based guesses or duplicate extension loading. Counts match Pi's visible inventory and exclude extensions Pi marks as hidden. It wraps only that resource-container instance's rendering and restores it on disposal/replacement; it does not edit installed Pi files, prototypes, or user settings. Unsupported versions/layouts and headers already owned by another extension are left unchanged.
+**Compatibility boundary:** Pi's public extension API does not expose the complete loaded-resource inventory or a separate way to fold its native resource container. `src/native-startup.ts` is a **Pi 1.2.0 / 1.4.0** presentation adapter. It reuses native logo/help components and counts leaf rows in Pi's own resource inventory—no directory-based guesses or duplicate extension loading. Counts match Pi's visible inventory and exclude extensions Pi marks as hidden. It wraps only that resource-container instance's rendering and restores it on disposal/replacement; it does not edit installed Pi files, prototypes, or user settings. Unsupported versions/layouts and headers already owned by another extension are left unchanged.
 
 Keep Pi's default `quietStartup: false` to make the inventory available for pi-home to fold. With `quietStartup: "header"`, Pi does not provide the ordinary inventory, so counts are `?` and the details explain why. Fully quiet startup is not forced to show a header. pi-home never silently changes this setting. Actual resource warnings can consume additional screen space; they are not hidden merely to preserve the layout.
 
@@ -163,7 +162,7 @@ Preview is a **text view of raw history**, including pre-compaction text and oth
 - **New sessions:** the session-header creation time falls within the range. Only saved files count; never-persisted empty or temporary sessions are unknown.
 - **Active sessions:** persisted messages/usage events attributed to the session fall within the range. Continuing yesterday's session counts as active today, not newly created today.
 - Messages, tools, and tokens are bucketed by event time, not the session's creation time.
-- Date boundaries use local time and account for DST. The heatmap shows **user-message counts** for up to the last 26 weeks, independently of statistics date controls. Narrow screens show fewer weeks.
+- Date boundaries use local time and account for DST. The heatmap shows **user-message counts** for up to the last 26 weeks, independently of statistics date controls. Narrow screens show fewer weeks. Each column is a Sunday-start week, so months are not equal-width. Month names are centered over their visible Sunday columns; one-week edge fragments omit the label instead of crowding adjacent months.
 - Input, output, cache-read, and cache-write tokens are separate. They are not network upload/download bytes. Reasoning tokens are already included in output and are not added again.
 - Recorded usage from assistants, independent usage entries, nested model work in tool results, compaction, and branch summaries is included. Missing usage is flagged. Usage whose model cannot be established stays in the `unattributed/unattributed` bucket rather than being guessed.
 - Attribution uses the message's `responseModel` when available, otherwise `model`, together with the provider. Merely selecting a model without calling it is not usage.
@@ -236,6 +235,8 @@ The original v0.1.0 cache is rebuilt automatically; no manual deletion is requir
 npm ci --ignore-scripts
 npm run check       # TypeScript + synthetic unit/integration tests
 npm run smoke       # Requires tmux; real Pi fullscreen/regular interaction tests
+# Also validate a different installed Pi package (including its bundled CLI):
+PI_HOME_SMOKE_PI_DIR=/absolute/path/to/pi-coding-agent npm run smoke
 npm run pack:check
 npm run benchmark   # 1,000 synthetic sessions; no access to real history
 ```

@@ -18,12 +18,15 @@ const coloredTop = "\x1b[38;2;228;138;122m▀▀█\x1b[0m  v1.2.0";
 const coloredBottom = "\x1b[34m█▀\x1b[0m \x1b[33m█\x1b[0m ";
 class NativeHeader extends NativeText {
   onLogoClick = undefined;
-  constructor() { super(`${coloredTop}\n${coloredBottom}escape interrupt · ctrl+o more\nPress ctrl+o to show full startup help and loaded resources.\n\nPi can explain its own features.`,
-    `${coloredTop}\n${coloredBottom}escape to interrupt\nctrl+c to clear\nctrl+o to expand\n\nPi can explain its own features.`); }
+  constructor(version = "1.2.0") {
+    const top = coloredTop.replace("1.2.0", version);
+    super(`${top}\n${coloredBottom}escape interrupt · ctrl+o more\nPress ctrl+o to show full startup help and loaded resources.\n\nPi can explain its own features.`,
+      `${top}\n${coloredBottom}escape to interrupt\nctrl+c to clear\nctrl+o to expand\n\nPi can explain its own features.`);
+  }
 }
-function fixture() {
+function fixture(version = "1.2.0") {
   const root = new Container(), document = new Container(), headerBox = new Container(), resources = new Container();
-  const native = new NativeHeader(); headerBox.addChild(native);
+  const native = new NativeHeader(version); headerBox.addChild(native);
   document.addChild(headerBox); document.addChild(resources); document.addChild(new Container()); root.addChild(document);
   resources.addChild(new NativeText("[Context]\n  a, b.md", "[Context]\n  /work/a, b.md"));
   resources.addChild(new NativeText("[Skills]\n  example", "[Skills]\n  user\n    /skills/example/SKILL.md"));
@@ -39,8 +42,8 @@ test("native adapter preserves original colored glyphs/version, substitutes coun
   const lines = header.render(110), output = lines.join("\n");
   assert.equal(lines[0], ` ${coloredTop}`);
   assert.ok(lines[1]!.startsWith(` ${coloredBottom}`));
-  assert.match(output, /Context 1 · Skills 1 · Extensions 3    \/home resources/);
-  assert.match(output, /Press ctrl\+o to show full startup help and loaded resources\./);
+  assert.match(output, /Context 1 Skills 1 Extensions 3    \/home resources/);
+  assert.match(output, /Press ctrl\+o to show help and loaded resources\./);
   assert.doesNotMatch(output, /escape interrupt|Pi can explain/);
   assert.doesNotMatch(f.resources.render(110).join("\n"), /\[Skills\]|\[Extensions\]/);
   assert.match(f.resources.render(110).join("\n"), /preserve me/);
@@ -61,9 +64,43 @@ test("resource labels are dim gray, counts brighter muted gray, and the native h
   const output = header.render(110).join("\n");
   for (const label of ["Context", "Skills", "Extensions", "/home resources"]) assert.ok(output.includes(`\x1b[90m${label}\x1b[0m`));
   for (const count of ["1", "3"]) assert.ok(output.includes(`\x1b[37m${count}\x1b[0m`));
-  assert.ok(output.includes("\x1b[90mPress ctrl+o to show full startup help and loaded resources.\x1b[0m"));
+  assert.ok(output.includes("\x1b[90mPress ctrl+o to show help and loaded resources.\x1b[0m"));
   assert.ok(header.render(60).every(l => visibleWidth(l) <= 60));
   header.dispose();
+});
+test("shorter native help hint retains the remapped expansion key", () => {
+  const f = fixture(), original = f.native.build.bind(f.native);
+  f.native.build = () => original().replaceAll("ctrl+o", "alt+o");
+  const header = new StartupHeader(attachNativeStartup(f.root, "1.2.0", true)!, theme);
+  const text = header.render(110).join("\n");
+  assert.match(text, /Press alt\+o to show help and loaded resources\./);
+  assert.doesNotMatch(text, /full startup help|ctrl\+o|Context 1 ·/);
+  header.dispose();
+});
+test("Pi 1.4.0 retains the startup heatmap, loading placeholders and resource folding", () => {
+  const f = fixture("1.4.0"), original = f.resources.render;
+  const bridge = attachNativeStartup(f.root, "1.4.0", true);
+  assert.ok(bridge, "current Pi version must attach the startup adapter");
+  const header = new StartupHeader(bridge, theme);
+  header.loading = true;
+  const pending = header.render(110).join("\n");
+  assert.match(pending, /v1\.4\.0/);
+  assert.match(pending, /\[Activity\]/);
+  assert.match(pending, /messages —/);
+  const empty = aggregate([], parseRange("all"));
+  header.data = { today: empty, history: empty, warnings: 0 };
+  header.loading = false;
+  for (const width of [60, 80, 110]) {
+    const lines = header.render(width), text = lines.join("\n");
+    for (const label of ["[Today]", "[Activity]", "Sun", "Sat", "Context 1"]) assert.ok(text.includes(label), label);
+    assert.ok(lines.every(line => visibleWidth(line) <= width));
+  }
+  header.setExpanded(true);
+  assert.match(f.resources.render(110).join("\n"), /\[Extensions\]/);
+  header.dispose();
+  assert.equal(f.resources.render, original);
+  assert.equal(attachNativeStartup(fixture().root, "1.4.0", true), undefined, "version label must match");
+  assert.equal(attachNativeStartup(fixture("1.4.01").root, "1.4.0", true), undefined, "no prefix version match");
 });
 test("unsupported versions, incomplete layouts, and other extensions' custom headers are not modified", () => {
   const f = fixture(), original = f.resources.render;
@@ -81,7 +118,7 @@ test("late native resource refreshes are reflected; quiet inventory gives unknow
   assert.match(bridge.prefix(100).join("\n"), /Skills 1/);
   bridge.dispose();
   const quiet = attachNativeStartup(f.root, "1.2.0", false)!;
-  assert.match(quiet.prefix(100).join("\n"), /Context \? · Skills \? · Extensions \?/);
+  assert.match(quiet.prefix(100).join("\n"), /Context \? Skills \? Extensions \?/);
   assert.equal(quiet.snapshot().available, false); quiet.dispose();
 });
 test("resource leaf counting tolerates commas/CJK and excludes scope/package headings", () => {
@@ -106,8 +143,9 @@ test("startup overview uses native bracket headings in one column and preserves 
     assert.ok(activity > 1);
     assert.equal(lines[activity - 1], "");
     assert.ok(lines.slice(1, activity - 1).every(l => l.startsWith("  ")));
-    assert.doesNotMatch(text, /│|TODAY|ACTIVITY/);
-    for (const label of ["Sun", "Mon", "Sat", "↑", "↓", "CH R", "W 0", "cost", "/home"]) assert.ok(text.includes(label), `${width}: ${label}`);
+    assert.doesNotMatch(text, /│|TODAY|ACTIVITY|Models tokens|User messages|User msgs|\/home ·/);
+    assert.match(lines.at(-1)!, /^  Sat /, "no footer or leftover blank line after the calendar");
+    for (const label of ["Sun", "Mon", "Sat", "↑", "↓", "CH R", "W 0", "cost"]) assert.ok(text.includes(label), `${width}: ${label}`);
     assert.ok(lines.every(l => visibleWidth(l) <= width));
   }
   const styled = startupOverview(data, 100, { ...theme, fg: (color, s) => color === "mdHeading" ? `\x1b[35m${s}\x1b[0m` : s,
@@ -127,8 +165,8 @@ test("Today packs counts and usage into two lines on wide screens and wraps with
   assert.equal(wide[1], "  messages 9 replies 167 tools 218 errors 7");
   assert.equal(wide[2], "  ↑ 479k ↓ 119k CH R 21M W 0 cost $31.92");
   assert.doesNotMatch(wide.join("\n"), /\bnew\b|\bactive\b|\buser\b|nested/);
-  assert.equal(wide[3], "  Models tokens"); assert.equal(wide[4], "  None recorded");
-  assert.equal(wide[6], ""); assert.equal(wide[7], "[Activity]");
+  assert.equal(wide[3], "  None recorded");
+  assert.equal(wide[5], ""); assert.equal(wide[6], "[Activity]");
   const narrow = startupOverview(data, 40, theme), text = narrow.join(" ").replace(/\s+/g, " ");
   for (const field of ["replies 167", "tools 218", "CH R 21M", "W 0", "cost $31.92"]) assert.ok(text.includes(field), field);
   assert.ok(narrow.every(l => visibleWidth(l) <= 40));
@@ -158,7 +196,8 @@ test("top model bars use all models as denominator, not just the two displayed m
   const stats = aggregate([], parseRange("all"));
   stats.models = [50, 30, 20].map((input, i) => ({ ...emptyTotals(), input, key: `p/m${i}`, sessions: new Set<string>() }));
   const output = startupOverview({ today: stats, history: stats, warnings: 0 }, 110, theme).join("\n");
-  assert.match(output, /Models tokens \(top 2\)/);
+  assert.doesNotMatch(output, /Models tokens/);
+  assert.match(output.split("\n")[3]!, /p\/m0/, "model bars follow usage immediately without a blank heading row");
   assert.match(output, /p\/m0 50 · 50%/); assert.match(output, /p\/m1 30 · 30%/);
   assert.doesNotMatch(output, /p\/m2/);
 });

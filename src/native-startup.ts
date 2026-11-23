@@ -1,4 +1,4 @@
-/** Pi 1.2.0 compatibility boundary. No module/prototype patches, resource rescans or core file edits.
+/** Pi 1.2.0 / 1.4.0 compatibility boundary. No module/prototype patches, resource rescans or core file edits.
  * We reuse native components to keep the exact logo, theme, keybindings and loaded-resource list.
  * Everything outside this module uses public extension/TUI APIs. Unsupported layouts are left alone.
  */
@@ -61,7 +61,7 @@ function updateText(c: Component | undefined): string | undefined {
   // Native changelog links may use OSC 8. Never render any parsed arbitrary notification text.
   return strip((c as any).build()).replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, "");
 }
-/** Recognize complete Pi 1.2.0 notification component sequences, never matching chat prose.
+/** Recognize complete validated native notification component sequences, never matching chat prose.
  * Unknown formats (including future native changes) remain visible in full.
  */
 function updateBlock(children: Component[], end: number): { start: number; version?: string; packages?: true } | undefined {
@@ -143,7 +143,9 @@ export interface NativeStartupBridge {
   dispose(): void;
 }
 export function attachNativeStartup(tui: unknown, version: string, listingEnabled: boolean): NativeStartupBridge | undefined {
-  if (version !== "1.2.0") return undefined;
+  // Only versions covered by the real-Pi smoke test; still validate the component layout below.
+  if (version !== "1.2.0" && version !== "1.4.0") return undefined;
+  const versionLabel = new RegExp(`\\bv${version.replaceAll(".", "\\.")}(?:\\s|$)`);
   const seen = new Set<unknown>();
   function find(node: any, depth: number): { header: NativeText; resources: NativeContainer; chat: NativeContainer } | undefined {
     if (depth > 8 || seen.size > 200 || !isContainer(node) || seen.has(node)) return;
@@ -154,7 +156,7 @@ export function attachNativeStartup(tui: unknown, version: string, listingEnable
       const header = headerContainer.children.find(c => isNativeText(c) && "onLogoClick" in c);
       if (header && isNativeText(header)) {
         const text = strip(buildAt(header, false));
-        if (/v1\.2\.0/.test(text) && /Press .+ to show full startup help/.test(text))
+        if (versionLabel.test(text) && /Press .+ to show full startup help/.test(text))
           return { header, resources: node.children[1] as NativeContainer, chat: node.children[2] as NativeContainer };
       }
     }
@@ -203,13 +205,14 @@ export function attachNativeStartup(tui: unknown, version: string, listingEnable
       const data = snapshot();
       const count = (name: string) => data.available ? String(data.sections.find(s => s.name === name)?.count ?? (data.sections.some(s => s.name === name) ? "?" : 0)) : "?";
       const fg = (color: "dim" | "muted" | "warning", text: string) => theme ? theme.fg(color, text) : text;
-      const counts = ["Context", "Skills", "Extensions"].map(name => `${fg("dim", name)} ${fg("muted", count(name))}${name === "Extensions" && updates?.state.packages ? fg("warning", "↑") : ""}`).join(fg("dim", " · "))
+      const counts = ["Context", "Skills", "Extensions"].map(name => `${fg("dim", name)} ${fg("muted", count(name))}${name === "Extensions" && updates?.state.packages ? fg("warning", "↑") : ""}`).join(" ")
         + (width < 70 ? "  " : "    ") + fg("dim", "/home resources");
       const prefix = logo ? sliceByColumn(raw[1] || "", 0, 5) : "";
-      // Keep the native hint's ANSI styling instead of stripping it to terminal-default white.
-      const hint = raw.find(l => strip(l).startsWith("Press ")) || fg("dim", "Press ctrl+o to show full startup help and loaded resources.");
+      // Shorten only the prose, retaining native ANSI styling and the actual remapped key.
+      const hint = (raw.find(l => strip(l).startsWith("Press ")) || fg("dim", "Press ctrl+o to show full startup help and loaded resources."))
+        .replace("full startup help", "help");
       const inner = Math.max(1, width - 2);
-      const top = raw[0] || "Pi v1.2.0";
+      const top = raw[0] || `Pi v${version}`;
       const topLines = updates?.state.version
         ? wrapTextWithAnsi(top + fg("warning", ` update available: v${updates.state.version}`), inner).map(l => ` ${l}`)
         : [truncateToWidth(` ${top}`, width, "")];

@@ -36,15 +36,13 @@ export function startupOverview(data: StartupData | undefined, width: number, th
     while (rows.length < wrapTextWithAnsi(template, inner).length) rows.push("");
     return rows.map(row => `  ${row}`);
   };
-  const lines = [title("Today"), ...metrics.flatMap((line, i) => indent(line, metricTemplates[i])),
-    ...indent(label(`Models tokens${tokenModels.length > 2 ? " (top 2)" : ""}`), "Models tokens (top 2)")];
+  const lines = [title("Today"), ...metrics.flatMap((line, i) => indent(line, metricTemplates[i]))];
   for (let i = 0; i < 2; i++) {
     const row = bars[i] ?? label(!data ? "—" : i === 0 ? "None recorded" : "");
     lines.push(...indent(row, "─────── — 999.9M · 100%"));
   }
   if (t?.unknownUsage) lines.push(theme.fg("warning", `  ${t.unknownUsage} records with unknown usage`));
-  lines.push("", title("Activity"), ...heatmap(data?.history.daily, inner, theme).map(line => `  ${line}`),
-    theme.fg("muted", "/home · sessions / search / preview / trash"));
+  lines.push("", title("Activity"), ...heatmap(data?.history.daily, inner, theme).map(line => `  ${line}`));
   if (data?.warnings) lines.push(theme.fg("warning", `${data.warnings} scan warnings · /home diagnostics`));
   return lines.map(l => truncateToWidth(l, width, width > 1 ? "…" : ""));
 }

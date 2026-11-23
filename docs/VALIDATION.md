@@ -1,4 +1,16 @@
-# Validation (0.2.2)
+# Validation (0.2.2 + unreleased)
+
+## Pi 1.4.0 startup compatibility
+
+- The version guard previously rejected 1.4.0 before installing the header, silently removing Today and the heatmap. Support now explicitly includes both validated 1.2.0 and 1.4.0 layouts; the actual native version label, component shape and help text must still match.
+- Regression tests cover the 1.4.0 pending and completed heatmap, resource folding/restoration, narrow widths, and rejection of mismatched or prefix-only version labels.
+- `PI_HOME_SMOKE_PI_DIR` selects the real package under test, rather than always exercising the pinned 1.2.0 devDependency. The full isolated smoke suite passes against the installed bundled Pi 1.4.0, including fullscreen/regular heatmaps, 80×24 and 60×24 layouts, Ctrl+O, reload, commands and native updates. Only synthetic histories are used.
+
+## Compact labels and month axis
+
+- Layout regressions check that model bars directly follow usage, the heatmap ends on Saturday, removed headings/captions/command hints leave no replacement rows, and resource counts have no dot separators.
+- Native hint tests preserve ANSI styling and remapped expansion keys while shortening only the prose. Real fullscreen/regular smoke checks the shorter hint and removed labels alongside existing update-notice tests.
+- Fixed-date calendar tests cover partial edge months, four/five-week spans, year transitions, leap-year dates, narrow widths, pending/ready axis equality and unchanged local-day activity placement.
 
 ## Inline update notifications
 
@@ -72,8 +84,8 @@ A metadata-only check against the user's actual default session directory and re
 
 ## Automated checks
 
-- `npm run check`: strict TypeScript and **111 synthetic tests**, all passing.
-- `npm run smoke`: real Pi 1.2.0 in a private tmux server; fullscreen and regular modes. All passing.
+- `npm run check`: strict TypeScript and **117 synthetic tests**, all passing.
+- `npm run smoke`: real Pi 1.2.0 and installed Pi 1.4.0 (selected with `PI_HOME_SMOKE_PI_DIR`) in a private tmux server; fullscreen and regular modes. All passing.
 - `npm run pack:check`: package includes runtime source, license/attribution and docs; no fixtures or private data.
 
 New safety regressions cover:

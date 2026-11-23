@@ -1,9 +1,8 @@
 import { VERSION, type ExtensionAPI, type ExtensionCommandContext, type ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { HomePanel, initialState, type Action, type HomeState } from "./home.js";
+import type { Action, HomeState } from "./home.js";
 import { attachNativeStartup, unavailableResources } from "./native-startup.js";
 import { ResourcesPanel, StartupHeader } from "./startup.js";
-import { scanInventory, subagentTempRoot } from "./inventory.js";
-import { InventoryPanel, inventoryState, type InventoryAction } from "./workspaces.js";
+import type { InventoryAction } from "./workspaces.js";
 import { aggregateCooperatively, atomicJson, mergeSessions, parseRange, refreshCache, safeText, type Session } from "./stats.js";
 import type { Diagnostic } from "./discovery.js";
 import { ActiveLease, activePaths, loadConfig, paths, sessionRoots, TrashStore, type Paths, type Ticket } from "./store.js";
@@ -129,6 +128,8 @@ export default function (pi: ExtensionAPI): void {
         ctx.ui.notify(`Home startup ${value}. Applies on the next launch or /reload.`, "info"); return;
       }
       if (arg === "undo") { const path = await store.restore(); ctx.ui.notify(`Restored ${safeText(path)}`, "info"); return; }
+      // Browser-only UI is not needed by the startup header.
+      const { initialState } = await import("./home.js");
       const state = initialState();
       if (arg === "workspaces" || arg === "artifacts" || arg === "artifacts all") {
         const cwd = await openInventory(ctx, p, store, arg === "workspaces", arg === "artifacts all" ? undefined : ctx.cwd);
@@ -163,6 +164,9 @@ export default function (pi: ExtensionAPI): void {
 }
 
 async function openInventory(ctx: ExtensionCommandContext, p: Paths, store: TrashStore, browse: boolean, cwd: string | undefined): Promise<string | undefined> {
+  const [{ InventoryPanel, inventoryState }, { scanInventory, subagentTempRoot }] = await Promise.all([
+    import("./workspaces.js"), import("./inventory.js"),
+  ]);
   const state = inventoryState(cwd ?? ctx.cwd, browse);
   state.cwd = cwd;
   while (true) {
@@ -190,6 +194,7 @@ async function openInventory(ctx: ExtensionCommandContext, p: Paths, store: Tras
 }
 
 async function openHome(ctx: ExtensionCommandContext, p: Paths, store: TrashStore, state: HomeState): Promise<void> {
+  const { HomePanel } = await import("./home.js");
   let message = "", reload = true;
   let sessions: Session[] = [], trashed: Session[] = [], active = new Set<string>();
   let indexedStatus = "";

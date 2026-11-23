@@ -12,19 +12,22 @@ export function heatmap(daily: Stats["daily"] | undefined, width: number, theme:
   const values = daily ? [...daily.values()].map(t => t.users) : [];
   const max = values.reduce((a, b) => Math.max(a, b), 0);
   const labels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const axis = Array(weeks * 2).fill(" ");
-  let lastMonth = -1, lastEnd = -1;
-  for (let w = 0; w < weeks; w++) {
-    const d = new Date(shiftDay(start, w * 7));
-    if (d.getMonth() === lastMonth) continue;
-    lastMonth = d.getMonth();
-    const label = d.toLocaleString("en", { month: "short" });
-    if (w * 2 > lastEnd && w * 2 + label.length <= axis.length) {
-      for (let i = 0; i < label.length; i++) axis[w * 2 + i] = label[i];
-      lastEnd = w * 2 + label.length;
+  const axis = Array(weeks * 2 - 1).fill(" ");
+  // Each column is a Sunday-start week, not an equal-width month. Center labels over
+  // their visible Sunday columns; omit tiny edge fragments rather than crowd a neighbor.
+  for (let from = 0; from < weeks;) {
+    const month = new Date(shiftDay(start, from * 7));
+    let to = from + 1;
+    while (to < weeks && new Date(shiftDay(start, to * 7)).getMonth() === month.getMonth()) to++;
+    const label = month.toLocaleString("en", { month: "short" });
+    const span = (to - from) * 2 - 1;
+    if (span >= label.length) {
+      const column = from * 2 + Math.floor((span - label.length) / 2);
+      for (let i = 0; i < label.length; i++) axis[column + i] = label[i];
     }
+    from = to;
   }
-  const rows = [theme.fg("dim", `    ${axis.join("")}`)];
+  const rows = [theme.fg("dim", `    ${axis.join("").trimEnd()}`)];
   for (let day = 0; day < 7; day++) {
     let row = theme.fg("dim", `${labels[day]} `);
     for (let w = 0; w < weeks; w++) {
@@ -35,6 +38,5 @@ export function heatmap(daily: Stats["daily"] | undefined, width: number, theme:
     }
     rows.push(row);
   }
-  rows.push(theme.fg("muted", width < 44 ? `User msgs · local · ${weeks}w` : `User messages · local dates · last ${weeks} weeks`));
   return rows;
 }

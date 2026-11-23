@@ -1,11 +1,19 @@
 /** Real Pi + tmux smoke test. Synthetic sessions only; isolated HOME/agent dir; no network/models. */
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 import { mkdtemp, mkdir, writeFile, readFile, rm, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Run against the installed Pi too, not just the project's pinned devDependency.
+const piDir = process.env.PI_HOME_SMOKE_PI_DIR || join(repo, "node_modules/@earendil-works/pi-coding-agent");
+const piVersion: string = JSON.parse(await readFile(join(piDir, "package.json"), "utf8")).version;
+const bundled = existsSync(join(piDir, "dist/bundle/cli.js"));
+const piCli = join(piDir, bundled ? "dist/bundle/cli.js" : "dist/cli.js");
+const piModule = join(piDir, bundled ? "dist/bundle/index.js" : "dist/modes/interactive/interactive-mode.js");
+const updateVersion = "1.5.0";
 const root = await mkdtemp(join(tmpdir(), "pi-home-pty-")), socket = `pi-home-${process.pid}`;
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 function tmux(...args: string[]): string {
@@ -54,7 +62,7 @@ try {
   await writeFile(updatesPreload, `
 import { access } from "node:fs/promises";
 import { setTimeout as sleep } from "node:timers/promises";
-import { InteractiveMode } from ${JSON.stringify(join(repo, "node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/interactive-mode.js"))};
+import { InteractiveMode } from ${JSON.stringify(piModule)};
 const root = ${JSON.stringify(root)};
 async function signal(name) { for (;;) { try { await access(root + "/" + name); return; } catch { await sleep(25); } } }
 const original = InteractiveMode.prototype.init;
@@ -62,7 +70,7 @@ InteractiveMode.prototype.init = async function (...args) {
   const result = await original.apply(this, args);
   void (async () => {
     await signal("emit-core");
-    this.showNewVersionNotification({ version: "1.3.0", note: "Synthetic native release note: hidden in compact mode." });
+    this.showNewVersionNotification({ version: ${JSON.stringify(updateVersion)}, note: "Synthetic native release note: hidden in compact mode." });
     await signal("emit-packages");
     this.showPackageUpdateNotification(["npm:synthetic-update", "git:synthetic-update"]);
     await signal("emit-warning");
@@ -73,14 +81,15 @@ InteractiveMode.prototype.init = async function (...args) {
 `);
   const launch = (mode: "fullscreen" | "regular", columns = 110, rows = 56, updates = false) => {
     const env = [`HOME=${join(root, "home")}`, `PATH=${process.env.PATH}`, "TERM=xterm-256color", "LANG=C.UTF-8", `PI_CODING_AGENT_DIR=${join(root, "agent")}`, `PI_SUBAGENTS_TEMP_ROOT=${join(root, "private-temp")}`];
-    const args = [process.execPath, ...(updates ? ["--import", updatesPreload] : []), join(repo, "node_modules/@earendil-works/pi-coding-agent/dist/cli.js"), "--offline", "--no-extensions", "--no-themes", "--no-approve", "--tui-mode", mode, "-e", join(repo, "src/index.ts")];
+    const args = [process.execPath, ...(updates ? ["--import", updatesPreload] : []), piCli, "--offline", "--no-extensions", "--no-themes", "--no-approve", "--tui-mode", mode, "-e", join(repo, "src/index.ts")];
     tmux("new-session", "-d", "-s", "smoke", "-x", String(columns), "-y", String(rows), "-c", join(root, "work"), `env -i ${[...env, ...args].map(quote).join(" ")}`);
   };
   launch("fullscreen");
   await wait("messages 3"); // [Activity] is already present in the pending skeleton.
-  assert.ok(capture().includes("Context 1 · Skills 1 · Extensions 1"));
+  assert.ok(capture().includes("Context 1 Skills 1 Extensions 1"));
+  assert.ok(!/Models tokens|User messages ·|User msgs ·|\/home · sessions/.test(capture()));
   assert.ok(capture().includes("[Skill conflicts]"), "native resource warnings remain visible even while inventory is folded");
-  assert.ok(capture().includes("Press ctrl+o to show full startup help and loaded resources."));
+  assert.ok(capture().includes("Press ctrl+o to show help and loaded resources."));
   assert.ok(!capture().includes("[Extensions]"));
   assert.ok(!capture().includes("Pi can explain"));
   key("C-o"); await wait("[Extensions]");
@@ -89,7 +98,7 @@ InteractiveMode.prototype.init = async function (...args) {
   assert.ok(capture().includes("[Extensions]"));
   assert.ok(capture().includes("[Prompts]")); key("Escape"); await sleep(100);
   await command("/reload"); await wait("Reloaded keybindings"); await wait("messages 3");
-  assert.ok(capture().includes("Context 1 · Skills 1 · Extensions 1"));
+  assert.ok(capture().includes("Context 1 Skills 1 Extensions 1"));
   assert.ok(!capture().includes("[Extensions]"));
   assert.ok(!capture().includes("[Workspace]"));
   await command("/workspaces"); await wait("/other-work");
@@ -135,7 +144,7 @@ InteractiveMode.prototype.init = async function (...args) {
   await command("/home startup on"); await wait("Home startup on");
   tmux("kill-session", "-t", "smoke");
   launch("regular"); await wait("messages 3");
-  assert.ok(capture().includes("Context 1 · Skills 1 · Extensions 1"));
+  assert.ok(capture().includes("Context 1 Skills 1 Extensions 1"));
   key("C-o"); await wait("[Extensions]"); key("C-o"); await sleep(100);
   assert.ok(!capture().includes("[Extensions]"));
   await command("/home sessions"); await wait("Search:"); key("Enter"); await wait("Read-only");
@@ -150,7 +159,7 @@ InteractiveMode.prototype.init = async function (...args) {
   } } }));
   launch("fullscreen", 80, 40); await wait("messages 3");
   const full = capture();
-  for (const label of ["v1.2.0", "Context 1", "[Today]", "[Activity]", "CH R", "Sun", "Sat"]) assert.ok(full.includes(label), `${label} absent at 80x40:\n${full}`);
+  for (const label of [`v${piVersion}`, "Context 1", "[Today]", "[Activity]", "CH R", "Sun", "Sat"]) assert.ok(full.includes(label), `${label} absent at 80x40:\n${full}`);
   assert.ok(full.indexOf("[Today]") < full.indexOf("[Activity]"));
   assert.ok(!full.includes("│"), "startup is single-column");
   for (const columns of [80, 60]) {
@@ -164,7 +173,7 @@ InteractiveMode.prototype.init = async function (...args) {
     const pending = capture();
     assert.ok(!pending.includes("update available:") && !pending.includes("Extensions 1↑"));
     tmux("send-keys", "-t", "smoke", "-l", "更新检测期间输入"); await wait("更新检测期间输入");
-    await writeFile(join(root, "emit-core"), "go"); await wait("v1.2.0 update available: v1.3.0");
+    await writeFile(join(root, "emit-core"), "go"); await wait(`v${piVersion} update available: v${updateVersion}`);
     await writeFile(join(root, "emit-packages"), "go"); await wait("Extensions 1↑");
     const ready = capture();
     assert.ok(ready.includes("更新检测期间输入"), "late notifications preserve the editor draft");
@@ -174,9 +183,9 @@ InteractiveMode.prototype.init = async function (...args) {
     key("C-o"); await wait("[Extensions]");
     assert.ok(!capture().includes("Package Updates Available")); key("C-o"); key("C-u");
     await command("/reload"); await wait("Reloaded keybindings"); await wait("Extensions 1↑");
-    assert.ok(capture().includes("update available: v1.3.0"), "native update state survives extension reload");
+    assert.ok(capture().includes(`update available: v${updateVersion}`), "native update state survives extension reload");
     await command("/new"); await wait("Extensions 1↑");
-    assert.ok(capture().includes("update available: v1.3.0"), "native update state survives a new session");
+    assert.ok(capture().includes(`update available: v${updateVersion}`), "native update state survives a new session");
     tmux("kill-session", "-t", "smoke");
   }
   success = true;

@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Restore the startup Today/heatmap on Pi 1.4.0: validate its native layout alongside 1.2.0 instead of rejecting it at the version guard. Allow smoke tests to target an installed package/bundled CLI, preventing tests against only the pinned older devDependency from missing this regression.
+- Load session/workspace/artifact browser UI on demand without deferring or disabling the startup header and heatmap.
+
+- Remove the startup model heading, heatmap caption and browser-command footer without leaving replacement rows. Keep model usage bars, calendar data and scan warnings.
+- Center month labels over their actual visible week spans and omit labels on one-week edge fragments; preserve week alignment and local-date accounting.
+- Remove dots between resource counts and shorten the native help hint while preserving its styling, remapped shortcut and Ctrl+O behavior.
+
 ## 0.2.2 — Compact startup updates
 
 - Remove the redundant startup `[Workspace]` section; leave cwd display to Pi's footer. Preserve `/workspaces`, cwd filtering and the read-only artifact inventory.
